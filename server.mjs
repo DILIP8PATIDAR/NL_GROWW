@@ -61,7 +61,7 @@ export function createApp(options={}) {
      if(reason)return json(res,200,{...refusal(reason),mode:'safety'});
      if(!apiKey)return json(res,200,{...previewAssistant(profile,text,stage),mode:'preview'});
      if(data.consent!==true)return json(res,400,{error:'Allow sending your profile and conversation to the AI provider before using live AI.'});
-     const output=await callAI(assistantSchema,'sip_guidance',assistantPrompt,{profile,stage,message:text,conversation:messages});
+     let output;try{output=await callAI(assistantSchema,'sip_guidance',assistantPrompt,{profile,stage,message:text,conversation:messages});}catch{ return json(res,200,{...previewAssistant(profile,text,stage),mode:'preview'}); }
      const out=output===null?refusal('picks'):validateAssistant(output);
      if(/(?:you should|i recommend|buy|invest in|switch to).{0,45}(?:\bfund\b|\bstock\b|\bscheme\b)/i.test(out.reply))return json(res,200,{...refusal('picks'),mode:'safety'});
      return json(res,200,{...out,mode:'live'});
@@ -69,7 +69,7 @@ export function createApp(options={}) {
     const reason=safety(text);if(reason==='identifiers')return json(res,400,{error:'Remove personal identifiers before classifying research.'});
     if(!apiKey){const result=baseline.classify(text);const top=result.top;return json(res,200,{mode:'preview',theme:top?.id||'uncertain',lapse:top?.lapse||'uncertain',summary:top?.label||'More context needed',quote:top?.matched?.[0]||'',rationale:top?.why12m||'Too little information.',metric:top?.productOutcome||'Not enough information.'});}
     if(data.consent!==true)return json(res,400,{error:'Allow sending research text to the AI provider before classifying.'});
-    let out=await callAI(discoverySchema,'research_theme',discoveryPrompt,{text});
+    let out;try{out=await callAI(discoverySchema,'research_theme',discoveryPrompt,{text});}catch{const result=baseline.classify(text),top=result.top;return json(res,200,{mode:'rules_fallback',theme:top?.id||'uncertain',lapse:top?.lapse||'uncertain',summary:top?.label||'More context needed',quote:top?.matched?.[0]||'',rationale:top?.why12m||'Too little information.',metric:top?.productOutcome||'Not enough information.'});}
     if(!out||![...themes,'uncertain'].includes(out.theme)||!['voluntary','involuntary','silent','recovery','never_lapsed','uncertain'].includes(out.lapse)||['summary','quote','rationale','metric'].some(k=>typeof out[k]!=='string'||out[k].length>4000)||(out.quote&&!text.includes(out.quote))){const result=baseline.classify(text),top=result.top;return json(res,200,{mode:'rules_fallback',theme:top?.id||'uncertain',lapse:top?.lapse||'uncertain',summary:top?.label||'More context needed',quote:top?.matched?.[0]||'',rationale:top?.why12m||'Too little information.',metric:top?.productOutcome||'Not enough information.'});}
     return json(res,200,{...out,mode:'live'});
    }
